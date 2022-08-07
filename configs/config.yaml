@@ -1,0 +1,21 @@
+trainer:
+  name: Trainer
+  num_epochs: 100
+
+dataset:
+  name: Cat_Dog
+  root: data
+  batch_size: 32
+
+model:
+  name: ResNet
+  arch: 34
+        #18, 34, 50, 101, 152
+
+optimizer:
+  name: Adam
+  lr: 1.e-2
+
+scheduler:
+  name: StepLR
+  step_size: 10
