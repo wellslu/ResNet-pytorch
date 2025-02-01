@@ -4,9 +4,10 @@ import torch.nn.functional as F
 
 archs = {18: [[64, 64, 2], [64,128,2], [128,256,2], [256,512,2]],
          34: [[64, 64, 3], [64,128,4], [128,256,6], [256,512,3]],
-         50: [[64, 64, 3], [256,128,4], [512,256,6], [1024,512,3]],
-         101: [[64, 64, 3], [256,128,4], [512,256,23], [1024,512,3]],
-         152: [[64, 64, 3], [256,128,8], [512,256,36], [1024,512,3]]}
+        #  50: [[64, 64, 3], [256,128,4], [512,256,6], [1024,512,3]],
+        #  101: [[64, 64, 3], [256,128,4], [512,256,23], [1024,512,3]],
+        #  152: [[64, 64, 3], [256,128,8], [512,256,36], [1024,512,3]]
+         }
 
 class ConvBN(nn.Sequential):
 
@@ -40,49 +41,51 @@ class ResidualBlock(nn.Module):
 
         return out
         
-class BottleneckBlock(nn.Module):
+# first layer do shortcut, last layer do out_channels*4
+# class BottleneckBlock(nn.Module):
     
-    def __init__(self, in_channels, out_channels, stride=1):
-        super(BottleneckBlock, self).__init__()
-        self.CB1 = ConvBN(in_channels, out_channels, kernel_size=1, stride=stride)
-        self.CB2 = ConvBN(out_channels, out_channels)
-        self.CB3 = ConvBN(out_channels, out_channels*4, kernel_size=1)
-        if in_channels != out_channels:
-            self.shortcut = ConvBN(in_channels, out_channels*4, kernel_size=1, stride=stride, padding=0)
-        else:
-            self.shortcut = None
+#     def __init__(self, in_channels, out_channels, stride=1):
+#         super(BottleneckBlock, self).__init__()
+#         self.CB1 = ConvBN(in_channels, out_channels, kernel_size=1, padding=0)
+#         self.CB2 = ConvBN(out_channels, out_channels, stride=stride)
+#         self.CB3 = ConvBN(out_channels, out_channels, kernel_size=1, padding=0)
+#         if in_channels != out_channels:
+#             self.shortcut = ConvBN(in_channels, out_channels, kernel_size=1, stride=stride)
+#         else:
+#             self.shortcut = None
         
-    def forward(self, x):
-        out = self.CB1(x)
-        out = F.relu(out)
-        out = self.CB2(out)
-        out = F.relu(out)
-        out = self.CB3(out)
+#     def forward(self, x):
+#         out = self.CB1(x)
+#         out = F.relu(out)
+#         out = self.CB2(out)
+#         out = F.relu(out)
+#         out = self.CB3(out)
 
-        if self.shortcut is not None:
-            x = self.shortcut(x)
+#         if self.shortcut is not None:
+#             x = self.shortcut(x)
 
-        out += x
-        out = F.relu(out)
+#         out += x
+#         out = F.relu(out)
 
-        return out
+#         return out
     
         
         
 @mlconfig.register
 class ResNet(nn.Module):
 
-    def __init__(self, arch):
+    def __init__(self, arch, num_classes=10):
         super(ResNet, self).__init__()
         arch_list = archs[arch]
         self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         )
         
-        self.block = ResidualBlock if arch in [18, 34] else BottleneckBlock
+        # self.block = ResidualBlock if arch in [18, 34] else BottleneckBlock
+        self.block = ResidualBlock
         
         self.stage1 = self._make_layer(arch_list[0][0], arch_list[0][1], arch_list[0][2], stage1=True)
         self.stage2 = self._make_layer(arch_list[1][0], arch_list[1][1], arch_list[1][2])
@@ -91,7 +94,7 @@ class ResNet(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
         
         self.classifier = nn.Sequential(
-            nn.Linear(arch_list[3][1] if arch in [18, 34] else arch_list[3][1]*4 , 2),
+            nn.Linear(arch_list[3][1] if arch in [18, 34] else arch_list[3][1]*4 , num_classes),
             nn.Softmax(dim=1)
         )
 
@@ -111,7 +114,7 @@ class ResNet(nn.Module):
     def _make_layer(self, in_channels, out_channels, block_num, stage1=False):
         layers = []
         for b in range(block_num):
-            if block_num==0 and not stage1:
+            if b == 0 and not stage1:
                 layers.append(self.block(in_channels, out_channels, stride=2))
             else:
                 layers.append(self.block(in_channels, out_channels))
